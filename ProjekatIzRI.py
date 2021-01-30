@@ -7,13 +7,13 @@ Original file is located at
     https://colab.research.google.com/drive/134o3Ey228wRhluw_Sjx8cuKR7Uo4f9n3
 """
 
-!pip install tensorflow
 from google.colab import drive
 drive.mount('/content/drive')
 
-!pip install sklearn
-!pip install skimage
-!pip install colorama
+#!pip install tensorflow
+#!pip install sklearn
+#!pip install skimage
+#!pip install colorama
 
 import os
 import tensorflow as tf
