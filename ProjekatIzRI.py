@@ -121,10 +121,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-#konstruisemo model
-# metodu Sequential prosledjujemo listu slojeva,zatim kompiliramo nas model
-# koriseci optimizator Adam sa faktorom ucenja 0.0003,f-jom gubitka mse,
-# koristeci metriku mse za ocenu kvaliteta modela
 IMAGE_SIZE = 128
 
 def model():
