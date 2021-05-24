@@ -28,7 +28,8 @@ from colorama import Fore, Style
 from tensorflow.keras import datasets,models
 from numpy import ndarray
 from keras.models import Model
-from keras.layers import Conv2D,Input,MaxPooling2D,UpSampling2D,Add
+from keras import Sequential
+from keras.layers import Convolution2D
 import keras.backend as K
 from keras.optimizers import Adam
 from matplotlib import pyplot as plt
@@ -110,46 +111,26 @@ def load_images(inputdir,inputpath,imagesize):
   for i in range(len(inputpath)):
     img = cv2.imread(inputdir + inputpath[i],cv2.IMREAD_COLOR)
     img = cv2.resize(img,(128,128))
-    # img = img[::-1]
     imglist.append(img)
   return imglist
 
 def main():
-    prepare_image("drive/MyDrive/slike/Set5",2)  
+    prepare_image("drive/MyDrive/slike/Set5",3)  
   
 
 if __name__ == "__main__":
     main()
 
 IMAGE_SIZE = 128
-
+CHANNELS = 3
 def model():
-    input_img = Input(shape=(IMAGE_SIZE,IMAGE_SIZE,3))
-    
-    enc1 = Conv2D(64,kernel_size=3,activation="relu",padding="same")(input_img)
-    enc1 = Conv2D(64,kernel_size=3,activation="relu",padding="same")(enc1)
-    down1 = MaxPooling2D(pool_size=2)(enc1)
-
-    enc2 = Conv2D(128,kernel_size=3,activation="relu",padding="same")(down1)
-    enc2 = Conv2D(128,kernel_size=3,activation="relu",padding="same")(enc2)
-    down2 = MaxPooling2D(pool_size=2)(enc2)
-    
-    enc3 = Conv2D(256,kernel_size=3,activation="relu",padding="same")(down2)
-    
-    up3 = UpSampling2D(size=2)(enc3)
-    dec3 = Conv2D(128,kernel_size=3,activation="relu",padding="same")(up3)
-    dec3 = Conv2D(128,kernel_size=3,activation="relu",padding="same")(dec3)
-    
-    add2 = Add()([dec3,enc2])
-    up2 = UpSampling2D(size=2)(add2)
-    dec2 = Conv2D(64,kernel_size=3,activation="relu",padding="same")(up2)
-    dec2 = Conv2D(64,kernel_size=3,activation="relu",padding="same")(dec2)
-    
-    add1 = Add()([dec2,enc1])
-    dec1 = Conv2D(3,kernel_size=5,activation="linear",padding="same")(add1)
-    
-    SRCNN = Model(input_img,dec1)
-    return SRCNN
+    model = Sequential()
+    model.add(Convolution2D(64,9,activation="relu",input_shape=(IMAGE_SIZE,IMAGE_SIZE,CHANNELS),padding="same"))
+    model.add(Convolution2D(32,3,activation="relu",padding="same"))
+    model.add(Convolution2D(3,5,activation="relu",padding="same"))
+    return model
+SRCNN = model()
+SRCNN.summary()
 
 image_path = sorted(os.listdir('drive/MyDrive/slike/General-100/General-100'))
 image = load_images('drive/MyDrive/slike/General-100/General-100/',image_path,IMAGE_SIZE)
@@ -163,28 +144,20 @@ for i in range(image.shape[0]):
   label[i,:,:,:]=temp
 label.shape
 
-SRCNN = model()
-SRCNN.summary()
-
 initial_lerningrate = 2e-3
 
 def ssim_loss(y_true, y_pred):
   return tf.reduce_mean(tf.image.ssim(y_true, y_pred, 2.0))
 
 
-SRCNN.compile(loss="mean_squared_error",optimizer=Adam(learning_rate=initial_lerningrate),metrics=[psnr,ssim_loss])
-SRCNN.fit(image,label,epochs=200,batch_size=32,verbose=1)
+SRCNN.compile(loss="mean_squared_error",optimizer=Adam(initial_lerningrate),metrics=[psnr,ssim_loss])
+SRCNN.fit(label,image,epochs=200,batch_size=32,verbose=1)
 
 testImage_path = sorted(os.listdir('drive/MyDrive/slike/Set5'))
 testImage = load_images('drive/MyDrive/slike/Set5/',testImage_path,IMAGE_SIZE)
 testImage /= np.max(testImage)
-testLabel = np.zeros((5,128,128,3),np.float32)
-for i in range(testImage.shape[0]):
-  temp = cv2.resize(testImage[i,:,:,:],(64,64))
-  temp = cv2.resize(temp,(128,128))
-  testLabel[i,:,:,:]=temp
-
-result  = SRCNN.predict(testImage)
+testLabel = np.zeros((5,128,128,3))
+result  = SRCNN.predict(testImage,batch_size=32)
 # result.shape
 
 print(Fore.BLUE + 'Poredjenje originalne slike i interpolirane(bikubicna interpolacija)')
@@ -237,11 +210,12 @@ for file in os.listdir('drive/MyDrive/slike1/'):
 print(Fore.BLUE + 'Poredjenje originalne slike i slike dobijene nakon primene SRCNN')
 i = 0
 for i in range(5):
-  imageA = (result[i]*255).astype(np.uint8)
-  imageB = (testImage[i]*255).astype(np.uint8)
+  imageA = result[i]
+  imageB = testImage[i].astype(np.float32)
   
   i+=1
   Psnr = psnr1(imageA,imageB)
+  Mse = mean_squared_error(imageA,imageB)
   SSIM = ssim(imageA,imageB,multichannel=True)
 
   fig = plt.figure()
@@ -257,4 +231,5 @@ for i in range(5):
   ax.set_title('SRCNN slika',fontdict={'fontweight': 'bold','color':'red'})
   ax.set_xticks([])
   ax.set_yticks([])
-  ax.set_xlabel('file:{}\nPSNR:{}\nSSIM:{}\n'.format(file,Psnr,SSIM),fontdict={'fontweight': 'bold','color':'red'})
+  ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(Psnr,SSIM),fontdict={'fontweight': 'bold','color':'red'})
+
