@@ -10,10 +10,10 @@ Original file is located at
 from google.colab import drive
 drive.mount('/content/drive')
 
-!pip install tensorflow
-!pip install sklearn
-!pip install skimage
-!pip install colorama
+# !pip install tensorflow
+# !pip install sklearn
+# !pip install skimage
+# !pip install colorama
 
 import os
 import tensorflow as tf
@@ -22,18 +22,14 @@ import cv2
 import keras
 import math
 import numpy as np
-# import h5py
-import colorama
 from colorama import Fore, Style
 from tensorflow.keras import datasets,models
-from numpy import ndarray
 from keras.models import Model
 from keras import Sequential
 from keras.layers import Convolution2D
 import keras.backend as K
 from keras.optimizers import Adam
 from matplotlib import pyplot as plt
-from matplotlib import image as mpimg
 from skimage.metrics import structural_similarity as ssim
 
 #poredimo tj racunamo slicnost izmedju slike A i slike B
@@ -125,10 +121,11 @@ IMAGE_SIZE = 128
 CHANNELS = 3
 def model():
     model = Sequential()
-    model.add(Convolution2D(64,9,activation="relu",input_shape=(IMAGE_SIZE,IMAGE_SIZE,CHANNELS),padding="same"))
-    model.add(Convolution2D(32,3,activation="relu",padding="same"))
+    model.add(Convolution2D(128,9,activation="relu",input_shape=(IMAGE_SIZE,IMAGE_SIZE,CHANNELS),padding="same"))
+    model.add(Convolution2D(64,3,activation="relu",padding="same"))
     model.add(Convolution2D(3,5,activation="relu",padding="same"))
     return model
+
 SRCNN = model()
 SRCNN.summary()
 
@@ -151,7 +148,7 @@ def ssim_loss(y_true, y_pred):
 
 
 SRCNN.compile(loss="mean_squared_error",optimizer=Adam(initial_lerningrate),metrics=[psnr,ssim_loss])
-SRCNN.fit(label,image,epochs=200,batch_size=32,verbose=1)
+history = SRCNN.fit(label,image,epochs=100,batch_size=32,verbose=1)
 
 testImage_path = sorted(os.listdir('drive/MyDrive/slike/Set5'))
 testImage = load_images('drive/MyDrive/slike/Set5/',testImage_path,IMAGE_SIZE)
@@ -207,7 +204,7 @@ for file in os.listdir('drive/MyDrive/slike1/'):
   ax.set_yticks([])
   ax.set_xlabel('file:{}\nPSNR:{}\nMSE:{}\nSSIM:{}\n'.format(file,Psnr,Mse,SSIM),fontdict={'fontweight': 'bold','color':'red'})
 
-print(Fore.BLUE + 'Poredjenje originalne slike i slike dobijene nakon primene SRCNN')
+print(Fore.BLUE + 'Poredjenje originalne slike i slike dobijene nakon primene SRCNN(9-3-5)')
 i = 0
 for i in range(5):
   imageA = result[i]
@@ -228,7 +225,121 @@ for i in range(5):
   ax = fig.add_subplot(1, 2, 2)
   imgplot = plt.imshow(cv2.cvtColor(imageA,cv2.COLOR_BGR2RGB))
   # imgplot.set_clim(0.0, 0.7)
-  ax.set_title('SRCNN slika',fontdict={'fontweight': 'bold','color':'red'})
+  ax.set_title('SRCNN(9-3-5) slika',fontdict={'fontweight': 'bold','color':'red'})
+  ax.set_xticks([])
+  ax.set_yticks([])
+  ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(Psnr,SSIM),fontdict={'fontweight': 'bold','color':'red'})
+
+def model1():
+    model = Sequential([
+                        Convolution2D(64,9,activation="gelu",input_shape=(IMAGE_SIZE,IMAGE_SIZE,CHANNELS),padding="same"),
+                        Convolution2D(32,1,activation="gelu",padding="same"),
+                        Convolution2D(16,1,activation="gelu",padding="same"),
+                        Convolution2D(3,5,activation="gelu",padding="same")
+                        ])
+    return model
+SRCNN = model1()
+SRCNN.summary()
+
+SRCNN.compile(loss="mean_squared_error",optimizer=Adam(initial_lerningrate),metrics=[psnr,ssim_loss])
+history1 = SRCNN.fit(label,image,epochs=100,batch_size=32,verbose=1)
+
+result  = SRCNN.predict(testImage,batch_size=32)
+
+print(Fore.BLUE + 'Poredjenje originalne slike i slike dobijene nakon primene SRCNN (9-1-1-5)')
+i = 0
+for i in range(5):
+  imageA = result[i]
+  imageB = testImage[i].astype(np.float32)
+  
+  i+=1
+  Psnr = psnr1(imageA,imageB)
+  Mse = mean_squared_error(imageA,imageB)
+  SSIM = ssim(imageA,imageB,multichannel=True)
+
+  fig = plt.figure()
+  ax = fig.add_subplot(1, 2, 1)
+  imgplot = plt.imshow(cv2.cvtColor(imageB,cv2.COLOR_BGR2RGB))
+  ax.set_title('Referentna slika',fontdict={'fontweight': 'bold','color':'red'})
+  ax.set_xticks([])
+  ax.set_yticks([])
+  
+  ax = fig.add_subplot(1, 2, 2)
+  imgplot = plt.imshow(cv2.cvtColor(imageA,cv2.COLOR_BGR2RGB))
+  # imgplot.set_clim(0.0, 0.7)
+  ax.set_title('SRCNN(9-1-1-5) slika',fontdict={'fontweight': 'bold','color':'red'})
+  ax.set_xticks([])
+  ax.set_yticks([])
+  ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(Psnr,SSIM),fontdict={'fontweight': 'bold','color':'red'})
+
+def model2():
+    model = Sequential()
+    model.add(Convolution2D(64,9,activation="elu",input_shape=(IMAGE_SIZE,IMAGE_SIZE,CHANNELS),padding="same"))
+    model.add(Convolution2D(32,1,activation="elu",padding="same"))
+    model.add(Convolution2D(3,5,activation="elu",padding="same"))
+    return model
+SRCNN = model2()
+SRCNN.summary()
+
+SRCNN.compile(loss="mean_squared_error",optimizer=Adam(initial_lerningrate),metrics=[psnr,ssim_loss])
+history2 = SRCNN.fit(label,image,epochs=100,batch_size=32,verbose=1)
+
+plt.title(label = 'PSNR',fontdict={'family':'serif','color':'red','size':25})
+plt.plot(history.epoch,history.history['psnr'])
+plt.plot(history1.epoch,history1.history['psnr'])
+plt.xlabel('EPOCHS',fontdict={'family':'serif','color':'red','size':15})
+plt.ylabel('PSNR',fontdict={'family':'serif','color':'red','size':15})
+plt.legend(['SRCNN (9-3-5)','SRCNN (9-1-1-5)'])
+plt.show()
+
+plt.title(label = 'SSIM_LOSS',fontdict={'family':'serif','color':'red','size':25})
+plt.plot(history.epoch,history.history['ssim_loss'])
+plt.plot(history1.epoch,history1.history['ssim_loss'])
+plt.xlabel('EPOCHS',fontdict={'family':'serif','color':'red','size':15})
+plt.ylabel('SSIM_LOSS',fontdict={'family':'serif','color':'red','size':15})
+plt.legend(['SRCNN (9-3-5)','SRCNN (9-1-1-5)'])
+plt.show()
+
+plt.title(label = 'PSNR',fontdict={'family':'serif','color':'red','size':25})
+plt.plot(history1.epoch,history1.history['psnr'])
+plt.plot(history2.epoch,history2.history['psnr'])
+plt.xlabel('EPOCHS',fontdict={'family':'serif','color':'red','size':15})
+plt.ylabel('PSNR',fontdict={'family':'serif','color':'red','size':15})
+
+plt.legend(['SRCNN (9-1-1-5)','SRCNN (9-1-5)'])
+
+plt.title(label = 'SSIM_LOSS',fontdict={'family':'serif','color':'red','size':25})
+plt.plot(history1.epoch,history1.history['ssim_loss'])
+plt.plot(history2.epoch,history2.history['ssim_loss'])
+plt.xlabel('EPOCHS',fontdict={'family':'serif','color':'red','size':15})
+plt.ylabel('SSIM_LOSS',fontdict={'family':'serif','color':'red','size':15})
+plt.legend(['SRCNN (9-1-1-5)','SRCNN (9-1-5)'])
+plt.show()
+
+result  = SRCNN.predict(testImage,batch_size=32)
+
+print(Fore.BLUE + 'Poredjenje originalne slike i slike dobijene nakon primene SRCNN (9-1-5)')
+i = 0
+for i in range(5):
+  imageA = result[i]
+  imageB = testImage[i].astype(np.float32)
+  
+  i+=1
+  Psnr = psnr1(imageA,imageB)
+  Mse = mean_squared_error(imageA,imageB)
+  SSIM = ssim(imageA,imageB,multichannel=True)
+
+  fig = plt.figure()
+  ax = fig.add_subplot(1, 2, 1)
+  imgplot = plt.imshow(cv2.cvtColor(imageB,cv2.COLOR_BGR2RGB))
+  ax.set_title('Referentna slika',fontdict={'fontweight': 'bold','color':'red'})
+  ax.set_xticks([])
+  ax.set_yticks([])
+  
+  ax = fig.add_subplot(1, 2, 2)
+  imgplot = plt.imshow(cv2.cvtColor(imageA,cv2.COLOR_BGR2RGB))
+  # imgplot.set_clim(0.0, 0.7)
+  ax.set_title('SRCNN(9-1-5) slika',fontdict={'fontweight': 'bold','color':'red'})
   ax.set_xticks([])
   ax.set_yticks([])
   ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(Psnr,SSIM),fontdict={'fontweight': 'bold','color':'red'})
