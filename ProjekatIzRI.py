@@ -102,13 +102,19 @@ def prepare_image(path,factor):
 
         cv2.imwrite('drive/MyDrive/slike2/{}'.format(file),img2)
 
-def load_images(inputdir,inputpath,imagesize):
+def load_images(inputdir,inputpath):
   imglist = []
+  img1list = []
   for i in range(len(inputpath)):
     img = cv2.imread(inputdir + inputpath[i],cv2.IMREAD_COLOR)
-    img = cv2.resize(img,(128,128))
+    img1 = cv2.imread(inputdir + inputpath[i],cv2.IMREAD_COLOR)
+
+    img1 = cv2.resize(img,(64,64))
+    img = cv2.resize(img1,(128,128))
+    
     imglist.append(img)
-  return imglist
+    img1list.append(img1)
+  return imglist,img1list
 
 def main():
     prepare_image("drive/MyDrive/slike/Set5",3)  
@@ -117,29 +123,36 @@ def main():
 if __name__ == "__main__":
     main()
 
-IMAGE_SIZE = 128
-CHANNELS = 3
-def model():
+# IMAGE_SIZE = 128
+# CHANNELS = 3
+
+def model(IMAGE_SIZE,CHANNELS):
     model = Sequential()
     model.add(Convolution2D(128,9,activation="relu",input_shape=(IMAGE_SIZE,IMAGE_SIZE,CHANNELS),padding="same"))
     model.add(Convolution2D(64,3,activation="relu",padding="same"))
     model.add(Convolution2D(3,5,activation="relu",padding="same"))
     return model
 
-SRCNN = model()
-SRCNN.summary()
+SRCNN = model(128,3)
+# print(SRCNN.summary())
+
+SRCNN1 = model(64,3)
+# print(SRCNN1.summary())
 
 image_path = sorted(os.listdir('drive/MyDrive/slike/General-100/General-100'))
-image = load_images('drive/MyDrive/slike/General-100/General-100/',image_path,IMAGE_SIZE)
+image,image1 = load_images('drive/MyDrive/slike/General-100/General-100/',image_path)
 image /= np.max(image)
-image.shape
+image1 /= np.max(image1)
 
 label = np.zeros((100,128,128,3),np.float32)
+label1 = np.zeros((100,64,64,3),np.float32)
 for i in range(image.shape[0]):
   temp = cv2.resize(image[i,:,:,:],(64,64))
+  label1[i,:,:,:] = temp
   temp = cv2.resize(temp,(128,128))
   label[i,:,:,:]=temp
-label.shape
+# print(label.shape)
+# print(label1.shape)
 
 initial_lerningrate = 2e-3
 
@@ -150,18 +163,23 @@ def ssim_loss(y_true, y_pred):
 SRCNN.compile(loss="mean_squared_error",optimizer=Adam(initial_lerningrate),metrics=[psnr,ssim_loss])
 history = SRCNN.fit(label,image,epochs=100,batch_size=32,verbose=1)
 
+SRCNN1.compile(loss="mean_squared_error",optimizer=Adam(initial_lerningrate),metrics=[psnr,ssim_loss])
+History = SRCNN1.fit(label1,image1,epochs=100,batch_size=32,verbose=1)
+
 testImage_path = sorted(os.listdir('drive/MyDrive/slike/Set5'))
-testImage = load_images('drive/MyDrive/slike/Set5/',testImage_path,IMAGE_SIZE)
+testImage,testImage1 = load_images('drive/MyDrive/slike/Set5/',testImage_path)
+
 testImage /= np.max(testImage)
-testLabel = np.zeros((5,128,128,3))
+testImage1 /= np.max(testImage1)
+
 result  = SRCNN.predict(testImage,batch_size=32)
+result1 = SRCNN1.predict(testImage1,batch_size = 32)
 # result.shape
 
 print(Fore.BLUE + 'Poredjenje originalne slike i interpolirane(bikubicna interpolacija)')
 for file in os.listdir('drive/MyDrive/slike2/'):
   imageA = cv2.imread('drive/MyDrive/slike2/{}'.format(file))
-  imageB = cv2.imread('drive/MyDrive/slike/Set5/{}'.format(file))
-  
+  imageB = cv2.imread('drive/MyDrive/slike/Set5/{}'.format(file))  
   Psnr = psnr1(imageA,imageB)
   Mse = mean_squared_error(imageA,imageB)
   SSIM = ssim(imageA,imageB,multichannel=True)
@@ -207,30 +225,47 @@ for file in os.listdir('drive/MyDrive/slike1/'):
 print(Fore.BLUE + 'Poredjenje originalne slike i slike dobijene nakon primene SRCNN(9-3-5)')
 i = 0
 for i in range(5):
-  imageA = result[i]
+  imageA = result[i] 
   imageB = testImage[i].astype(np.float32)
   
-  i+=1
   Psnr = psnr1(imageA,imageB)
-  Mse = mean_squared_error(imageA,imageB)
   SSIM = ssim(imageA,imageB,multichannel=True)
+  
 
   fig = plt.figure()
-  ax = fig.add_subplot(1, 2, 1)
+  ax = fig.add_subplot(1, 3, 1)
   imgplot = plt.imshow(cv2.cvtColor(imageB,cv2.COLOR_BGR2RGB))
   ax.set_title('Referentna slika',fontdict={'fontweight': 'bold','color':'red'})
   ax.set_xticks([])
   ax.set_yticks([])
   
-  ax = fig.add_subplot(1, 2, 2)
+  ax = fig.add_subplot(1, 3, 2)
   imgplot = plt.imshow(cv2.cvtColor(imageA,cv2.COLOR_BGR2RGB))
   # imgplot.set_clim(0.0, 0.7)
   ax.set_title('SRCNN(9-3-5) slika',fontdict={'fontweight': 'bold','color':'red'})
   ax.set_xticks([])
   ax.set_yticks([])
-  ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(Psnr,SSIM),fontdict={'fontweight': 'bold','color':'red'})
+  ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(round(Psnr,3),round(SSIM,3),round(Mse,3)),fontdict={'fontweight': 'bold','color':'red'})
 
-def model1():
+  
+  imageC = result1[i]
+  imageD = testImage1[i]
+  i+=1
+  
+  Psnr1 = psnr1(imageC,imageD)
+  SSIM1 = ssim(imageC,imageD,multichannel=True)
+  
+
+  ax = fig.add_subplot(1, 3, 3)
+  imgplot = plt.imshow(cv2.cvtColor(imageC,cv2.COLOR_BGR2RGB))
+  # imgplot.set_clim(0.0, 0.7)
+  ax.set_title('Slika velicine(64,64,3)',fontdict={'fontweight': 'bold','color':'red'})
+  ax.set_xticks([])
+  ax.set_yticks([])
+  ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(round(Psnr1,3),round(SSIM1,3)),fontdict={'fontweight': 'bold','color':'red'})
+  plt.tight_layout()
+
+def model1(IMAGE_SIZE,CHANNELS):
     model = Sequential([
                         Convolution2D(64,9,activation="gelu",input_shape=(IMAGE_SIZE,IMAGE_SIZE,CHANNELS),padding="same"),
                         Convolution2D(32,1,activation="gelu",padding="same"),
@@ -238,51 +273,86 @@ def model1():
                         Convolution2D(3,5,activation="gelu",padding="same")
                         ])
     return model
-SRCNN = model1()
-SRCNN.summary()
+
+SRCNN = model1(128,3)
+# print(SRCNN.summary())
+
+SRCNN1 = model1(64,3)
+# print(SRCNN1.summary())
 
 SRCNN.compile(loss="mean_squared_error",optimizer=Adam(initial_lerningrate),metrics=[psnr,ssim_loss])
 history1 = SRCNN.fit(label,image,epochs=100,batch_size=32,verbose=1)
 
-result  = SRCNN.predict(testImage,batch_size=32)
+SRCNN1.compile(loss="mean_squared_error",optimizer=Adam(initial_lerningrate),metrics=[psnr,ssim_loss])
+History1 = SRCNN1.fit(label1,image1,epochs=100,batch_size=32,verbose=1)
 
-print(Fore.BLUE + 'Poredjenje originalne slike i slike dobijene nakon primene SRCNN (9-1-1-5)')
+result  = SRCNN.predict(testImage,batch_size=32)
+result1 = SRCNN1.predict(testImage1,batch_size = 32)
+
+print(Fore.BLUE + 'Poredjenje originalne slike i slike dobijene nakon primene SRCNN(9-1-1-5)')
 i = 0
 for i in range(5):
-  imageA = result[i]
+  imageA = result[i] 
   imageB = testImage[i].astype(np.float32)
   
-  i+=1
   Psnr = psnr1(imageA,imageB)
-  Mse = mean_squared_error(imageA,imageB)
   SSIM = ssim(imageA,imageB,multichannel=True)
+  
 
   fig = plt.figure()
-  ax = fig.add_subplot(1, 2, 1)
+  ax = fig.add_subplot(1, 3, 1)
   imgplot = plt.imshow(cv2.cvtColor(imageB,cv2.COLOR_BGR2RGB))
   ax.set_title('Referentna slika',fontdict={'fontweight': 'bold','color':'red'})
   ax.set_xticks([])
   ax.set_yticks([])
   
-  ax = fig.add_subplot(1, 2, 2)
+  ax = fig.add_subplot(1, 3, 2)
   imgplot = plt.imshow(cv2.cvtColor(imageA,cv2.COLOR_BGR2RGB))
   # imgplot.set_clim(0.0, 0.7)
   ax.set_title('SRCNN(9-1-1-5) slika',fontdict={'fontweight': 'bold','color':'red'})
   ax.set_xticks([])
   ax.set_yticks([])
-  ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(Psnr,SSIM),fontdict={'fontweight': 'bold','color':'red'})
+  ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(round(Psnr,3),round(SSIM,3)),fontdict={'fontweight': 'bold','color':'red'})
 
-def model2():
+  
+  imageC = result1[i]
+  imageD = testImage1[i]
+  i+=1
+  
+  Psnr1 = psnr1(imageC,imageD)
+  SSIM1 = ssim(imageC,imageD,multichannel=True)
+  
+
+  ax = fig.add_subplot(1, 3, 3)
+  imgplot = plt.imshow(cv2.cvtColor(imageC,cv2.COLOR_BGR2RGB))
+  # imgplot.set_clim(0.0, 0.7)
+  ax.set_title('Slika velicine(64,64,3)',fontdict={'fontweight': 'bold','color':'red'})
+  ax.set_xticks([])
+  ax.set_yticks([])
+  ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(round(Psnr1,3),round(SSIM1,3)),fontdict={'fontweight': 'bold','color':'red'})
+  plt.tight_layout()
+
+def model2(IMAGE_SIZE,CHANNELS):
     model = Sequential()
     model.add(Convolution2D(64,9,activation="elu",input_shape=(IMAGE_SIZE,IMAGE_SIZE,CHANNELS),padding="same"))
     model.add(Convolution2D(32,1,activation="elu",padding="same"))
     model.add(Convolution2D(3,5,activation="elu",padding="same"))
     return model
-SRCNN = model2()
-SRCNN.summary()
+
+SRCNN = model2(128,3)
+# print(SRCNN.summary())
+
+SRCNN1 = model2(64,3)
+# print(SRCNN1.summary())
 
 SRCNN.compile(loss="mean_squared_error",optimizer=Adam(initial_lerningrate),metrics=[psnr,ssim_loss])
 history2 = SRCNN.fit(label,image,epochs=100,batch_size=32,verbose=1)
+
+SRCNN1.compile(loss="mean_squared_error",optimizer=Adam(initial_lerningrate),metrics=[psnr,ssim_loss])
+History2 = SRCNN1.fit(label1,image1,epochs=100,batch_size=32,verbose=1)
+
+result  = SRCNN.predict(testImage,batch_size=32)
+result1 = SRCNN1.predict(testImage1,batch_size = 32)
 
 plt.title(label = 'PSNR',fontdict={'family':'serif','color':'red','size':25})
 plt.plot(history.epoch,history.history['psnr'])
@@ -316,31 +386,45 @@ plt.ylabel('SSIM_LOSS',fontdict={'family':'serif','color':'red','size':15})
 plt.legend(['SRCNN (9-1-1-5)','SRCNN (9-1-5)'])
 plt.show()
 
-result  = SRCNN.predict(testImage,batch_size=32)
-
-print(Fore.BLUE + 'Poredjenje originalne slike i slike dobijene nakon primene SRCNN (9-1-5)')
+print(Fore.BLUE + 'Poredjenje originalne slike i slike dobijene nakon primene SRCNN(9-1-5)')
 i = 0
 for i in range(5):
-  imageA = result[i]
+  imageA = result[i] 
   imageB = testImage[i].astype(np.float32)
   
-  i+=1
   Psnr = psnr1(imageA,imageB)
-  Mse = mean_squared_error(imageA,imageB)
   SSIM = ssim(imageA,imageB,multichannel=True)
+  
 
   fig = plt.figure()
-  ax = fig.add_subplot(1, 2, 1)
+  ax = fig.add_subplot(1, 3, 1)
   imgplot = plt.imshow(cv2.cvtColor(imageB,cv2.COLOR_BGR2RGB))
   ax.set_title('Referentna slika',fontdict={'fontweight': 'bold','color':'red'})
   ax.set_xticks([])
   ax.set_yticks([])
   
-  ax = fig.add_subplot(1, 2, 2)
+  ax = fig.add_subplot(1, 3, 2)
   imgplot = plt.imshow(cv2.cvtColor(imageA,cv2.COLOR_BGR2RGB))
   # imgplot.set_clim(0.0, 0.7)
   ax.set_title('SRCNN(9-1-5) slika',fontdict={'fontweight': 'bold','color':'red'})
   ax.set_xticks([])
   ax.set_yticks([])
-  ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(Psnr,SSIM),fontdict={'fontweight': 'bold','color':'red'})
+  ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(round(Psnr,3),round(SSIM,3)),fontdict={'fontweight': 'bold','color':'red'})
 
+  
+  imageC = result1[i]
+  imageD = testImage1[i]
+  i+=1
+  
+  Psnr1 = psnr1(imageC,imageD)
+  SSIM1 = ssim(imageC,imageD,multichannel=True)
+  
+
+  ax = fig.add_subplot(1, 3, 3)
+  imgplot = plt.imshow(cv2.cvtColor(imageC,cv2.COLOR_BGR2RGB))
+  # imgplot.set_clim(0.0, 0.7)
+  ax.set_title('Slika velicine(64,64,3)',fontdict={'fontweight': 'bold','color':'red'})
+  ax.set_xticks([])
+  ax.set_yticks([])
+  ax.set_xlabel('PSNR:{}\nSSIM:{}\n'.format(round(Psnr1,3),round(SSIM1,3)),fontdict={'fontweight': 'bold','color':'red'})
+  plt.tight_layout()
